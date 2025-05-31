@@ -60,39 +60,56 @@ class TemporalEmbedding(nn.Module):
     def __init__(self, d_model, embed_type='fixed', freq='h'):
         super(TemporalEmbedding, self).__init__()
 
-        minute_size = 4; hour_size = 24
-        weekday_size = 7; day_size = 32; month_size = 13
+        minute_size = 4
+        hour_size = 24
+        weekday_size = 7
+        day_size = 32
+        month_size = 13
+        year_size = 100  # Adjust based on dataset year range (e.g., 324 years)
 
-        Embed = FixedEmbedding if embed_type=='fixed' else nn.Embedding
-        if freq=='t':
+        Embed = FixedEmbedding if embed_type == 'fixed' else nn.Embedding
+        if freq == 't':
             self.minute_embed = Embed(minute_size, d_model)
-        self.hour_embed = Embed(hour_size, d_model)
-        self.weekday_embed = Embed(weekday_size, d_model)
-        self.day_embed = Embed(day_size, d_model)
-        self.month_embed = Embed(month_size, d_model)
-    
+        if freq in ['h', 't', 's', 'd', 'b', 'w']:
+            self.hour_embed = Embed(hour_size, d_model)
+        if freq in ['d', 'b', 'w']:
+            self.weekday_embed = Embed(weekday_size, d_model)
+        if freq in ['d', 'b']:
+            self.day_embed = Embed(day_size, d_model)
+        if freq in ['m', 'a']:
+            self.month_embed = Embed(month_size, d_model)
+        if freq == 'y':
+            self.year_embed = Embed(year_size, d_model)  # Add year embedding for yearly freq
+
     def forward(self, x):
         x = x.long()
-        
-        minute_x = self.minute_embed(x[:,:,4]) if hasattr(self, 'minute_embed') else 0.
-        hour_x = self.hour_embed(x[:,:,3])
-        weekday_x = self.weekday_embed(x[:,:,2])
-        day_x = self.day_embed(x[:,:,1])
-        month_x = self.month_embed(x[:,:,0])
-        
-        return hour_x + weekday_x + day_x + month_x + minute_x
+        embeddings = 0.
+
+        if hasattr(self, 'minute_embed'):
+            embeddings += self.minute_embed(x[:, :, 4])
+        if hasattr(self, 'hour_embed'):
+            embeddings += self.hour_embed(x[:, :, 3])
+        if hasattr(self, 'weekday_embed'):
+            embeddings += self.weekday_embed(x[:, :, 2])
+        if hasattr(self, 'day_embed'):
+            embeddings += self.day_embed(x[:, :, 1])
+        if hasattr(self, 'month_embed'):
+            embeddings += self.month_embed(x[:, :, 0])
+        if hasattr(self, 'year_embed'):
+            embeddings += self.year_embed(x[:, :, 0])  # Use year feature
+
+        return embeddings
 
 class TimeFeatureEmbedding(nn.Module):
     def __init__(self, d_model, embed_type='timeF', freq='h'):
         super(TimeFeatureEmbedding, self).__init__()
 
-        freq_map = {'h':4, 't':5, 's':6, 'm':1, 'a':1, 'w':2, 'd':3, 'b':3}
+        freq_map = {'h': 4, 't': 5, 's': 6, 'm': 1, 'a': 1, 'w': 2, 'd': 3, 'b': 3, 'y': 1}
         d_inp = freq_map[freq]
         self.embed = nn.Linear(d_inp, d_model)
-    
+
     def forward(self, x):
         return self.embed(x)
-
 class DataEmbedding(nn.Module):
     def __init__(self, c_in, d_model, embed_type='fixed', freq='h', dropout=0.1):
         super(DataEmbedding, self).__init__()
